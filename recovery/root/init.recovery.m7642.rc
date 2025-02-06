@@ -1,0 +1,53 @@
+on init
+    mkdir /data/property
+    # sdcard/usb mount points
+    mkdir /mnt
+    mkdir /mnt/sdcard
+    mkdir /mnt/usb
+    mkdir /mnt/usb/sda1
+    mkdir /mnt/usb/mmcblka1
+    mkdir /storage
+
+on fs
+    mkdir /vendor/tvconfig
+    symlink /vendor/tvconfig/config /config
+
+# Xgimi Patch Begin
+    #start fanctrl_service
+# Xgimi Patch End
+
+    # restore security contexts here to label those device nodes created by utopia
+    restorecon /dev/gflip
+    restorecon /dev/msmailbox
+    restorecon /dev/system
+
+# Xgimi Patch Begin
+service console /sbin/mksh
+    seclabel u:r:shell:s0
+    console
+
+    #fanctrl_service中判断是否需要启动temp_control
+service fanctrl_service /sbin/fanctrl_service
+    seclabel u:r:temp_control:s0
+    oneshot
+
+    #进程间同步（为了确保 fanctrl_service 进程完成mount和insmod动作，先于 recovery 进程执行install_package）
+on property:vendor.xgimi.start.fanctrl=true
+    start temp_control
+    start recovery
+
+on property:vendor.xgimi.start.fanctrl=false
+    start recovery
+
+service temp_control /sbin/temp_control
+    seclabel u:r:temp_control:s0
+    disabled
+# Xgimi Patch End
+
+# Set watchdog timer to 30 seconds and pet it every 10 seconds to get a 20 second margin
+#service watchdogd /sbin/watchdogd 10 20
+#    class core
+# enable ir input for reboot recovery case
+    write /sys/module/mdrv_ir/parameters/input_event_en 1
+    write /sys/module/mdrv_ir/parameters/input_dev_event_enable 1
+
